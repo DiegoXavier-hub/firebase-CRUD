@@ -1,6 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { db } from './firebaseConnection'
-import { doc, setDoc, collection, addDoc, getDoc, getDocs, updateDoc } from 'firebase/firestore'
+import { db, auth } from './firebaseConnection'
+import { doc, 
+  setDoc, 
+  collection, 
+  addDoc, 
+  getDoc, 
+  getDocs, 
+  updateDoc, 
+  deleteDoc,
+  onSnapshot
+} from 'firebase/firestore'
+import {
+  signOut,
+  onAuthStateChanged
+} from 'firebase/auth'
 import './assets/css/app.css'
 
 function App() {
@@ -11,6 +24,7 @@ function App() {
   const [idade, setIdade] = useState(0)
   const [users, setUsers] = useState([])
   const userRef = collection(db, 'users')
+  const [userEmail, setUserEmail] = useState('');
   
   let idInput = document.getElementById('key');
   let nomeInput = document.getElementById('nome');
@@ -81,7 +95,7 @@ function App() {
         document.getElementById('console').value = 'CREATE ERROR! ' + error
       })
     } else {
-      alert('Preencha os campos corretomente!')
+      document.getElementById('console').value = 'Preencha os campos em vermelho corretamente'
     }
   }
 
@@ -108,16 +122,16 @@ function App() {
 
     await getDocs(userRef)
     .then((snapshot)=>{
-      let lista = []
+      let listaUsers = []
       snapshot.forEach((doc)=>{
-        lista.push({
+        listaUsers.push({
           id: doc.id,
           nome: doc.data().nome,
           sobrenome:doc.data().sobrenome,
           idade: doc.data().idade
         })
       })
-      setUsers(lista)
+      setUsers(listaUsers)
     })
     .catch((error)=>{
       document.getElementById('console').value = 'READ ERROR! ' + error
@@ -130,7 +144,7 @@ function App() {
     if(validateInputs()){
       if ((idInput.value.trim().length) < 20) {
         idInput.style.border = '2px solid red';
-        alert('Preencha o campo ID corretamente')
+        document.getElementById('console').value = 'Preencha o campo em vermelho corretamente'
       }else{
         const docRef = doc(db, 'users', idUser.trim())
         idInput.style.border = '2px solid green';
@@ -150,8 +164,34 @@ function App() {
           document.getElementById('console').value = 'UPDATE ERROR! ' + error
         })
       }
+    }else{
+      document.getElementById('console').value = 'Preencha os campos em vermelho corretamente'
     }
 
+  }
+
+  //DELETE
+
+  async function deleteUsers(id){
+    if ((idInput.value.trim().length) < 20) {
+      idInput.style.border = '2px solid red';
+      document.getElementById('console').value = 'Preencha o campo ID em vermelho corretamente'
+    }else{
+      const docRef = doc(db, 'users', id.trim())
+      await deleteDoc(docRef)
+      .then(()=>{
+        document.getElementById('console').value = 'Usuário deletado com sucesso!'
+      })
+      .catch((error)=>{
+        document.getElementById('console').value = 'DELETE ERROR! ' + error
+      })
+    }
+  }
+
+  //desloga o usuário e redireciona para a págica de login
+  async function Logout() {
+    await signOut(auth);
+    window.location.href = 'http://localhost:3000/';
   }
 
   useEffect(()=>{
@@ -159,7 +199,8 @@ function App() {
     nomeInput = document.getElementById('nome');
     sobrenomeInput = document.getElementById('sobrenome');
     idadeInput = document.getElementById('idade');
-
+    
+    //Se a state users for alterada, os dados são imprimidos na saida
     document.getElementById('console').value = users.map((user, index) => {
       return (
         (index === 0 ? '' : '\n\n') +
@@ -170,10 +211,46 @@ function App() {
       );
     });
 
+      /*
+      async function loadUsers(){
+        const onsub = onSnapshot(collection(db, 'users'), (snapshot)=>{
+          let listaUsers = []
+        snapshot.forEach((doc)=>{
+          listaUsers.push({
+            id: doc.id,
+            nome: doc.data().nome,
+            sobrenome:doc.data().sobrenome,
+            idade: doc.data().idade
+          })
+        })
+        setUsers(listaUsers)
+      })
+    }
+    
+    loadUsers()
+    */
+
   }, [users])
+  
+    //Se não estiver logado, redireciona para a página de login
+    useEffect(() => {
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+        if (user) {
+          //se tem algum usuário logado entra aqui
+          setUserEmail(user.email.split('@'));
+        }
+        if (!user) {
+          //se não tem nenhum usuário logado entra aqui
+          window.location.href = 'http://localhost:3000/';
+        }
+      });
+  
+      return () => unsubscribe();
+    }, []);
 
   return (
     <main className="App">
+      <h1>Olá, {userEmail[0]}</h1>
       <div className='input-container'>
         <label>
           <p>ID do usuário: </p>
@@ -225,13 +302,14 @@ function App() {
         </div>
         <div className='button-container'>
           <button onClick={()=>updateUsers()}>Update</button>
-          <button onClick={()=>updateUsers()}>Delete</button>
+          <button onClick={()=>deleteUsers(idUser)}>Delete</button>
         </div>
       </span>
       <div className='console'>
         <p>saida:</p>
         <textarea type='text' id='console' readOnly></textarea>
       </div>
+      <button onClick={Logout} id='logout'>Logout</button>
 
     </main>
   );
